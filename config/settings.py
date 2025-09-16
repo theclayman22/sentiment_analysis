@@ -79,7 +79,7 @@ class Settings:
             display_name="VADER",
             api_type="vader",
             supports_ekman=False,
-            supports_emotion_arc=False,
+            supports_emotion_arc=True,
             max_tokens=10000,
             rate_limit=1000
         )

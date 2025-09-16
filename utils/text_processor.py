@@ -72,8 +72,8 @@ class TextProcessor:
             sentences = sent_tokenize(cleaned)
             return [self.clean_text(sent) for sent in sentences if sent.strip()]
         except Exception:
-            # Fallback: Split by periods
-            sentences = cleaned.split('.')
+            # Fallback: Split on common sentence punctuation
+            sentences = re.split(r"[.!?]+", cleaned)
             return [self.clean_text(sent) for sent in sentences if sent.strip()]
 
     def chunk_text(self, text: str, max_tokens: int = 500, overlap: int = 50) -> List[str]:
