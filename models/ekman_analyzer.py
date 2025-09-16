@@ -29,7 +29,7 @@ class EkmanAnalyzer:
         try:
             config = self.api_manager.get_api_config("openai_reasoning")
             if getattr(config, "primary_key", None):
-                self.analyzers["apt-5-nano"] = OpenAIAnalyzer(config)
+                self.analyzers["gpt-5-nano"] = OpenAIAnalyzer(config)
         except Exception:  # pragma: no cover - defensive initialisation
             pass
 
@@ -108,14 +108,8 @@ class EkmanAnalyzer:
                 if synonym in result.scores and synonym not in EKMAN_EMOTIONS:
                     synonym_boost += float(result.scores[synonym]) * 0.3
 
-            enhanced_scores[emotion_key] = min(1.0, base_score + synonym_boost)
-
-        total_score = sum(enhanced_scores.values())
-        if total_score > 0:
-            enhanced_scores = {key: value / total_score for key, value in enhanced_scores.items()}
-        else:
-            uniform = 1.0 / len(enhanced_scores)
-            enhanced_scores = {key: uniform for key in enhanced_scores}
+            combined_score = base_score + synonym_boost
+            enhanced_scores[emotion_key] = max(0.0, min(1.0, combined_score))
 
         metadata = dict(result.metadata or {})
         metadata.update({
@@ -151,9 +145,5 @@ class EkmanAnalyzer:
         aggregated: Dict[str, float] = {}
         for emotion, values in emotion_scores.items():
             aggregated[emotion] = float(np.mean(values)) if values else 0.0
-
-        total = sum(aggregated.values())
-        if total > 0:
-            aggregated = {key: value / total for key, value in aggregated.items()}
 
         return aggregated

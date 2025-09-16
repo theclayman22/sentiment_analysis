@@ -16,7 +16,7 @@ class OpenAIAnalyzer(BaseAnalyzer):
     """Analyzer that delegates emotion detection to OpenAI models."""
 
     def __init__(
-        self, api_config: Optional[Any] = None, model_name: str = "apt-5-nano"
+        self, api_config: Optional[Any] = None, model_name: str = "gpt-5-nano"
     ) -> None:
         super().__init__(model_name=model_name, api_config=api_config)
         self._client = self._initialize_client()
