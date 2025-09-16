@@ -89,6 +89,7 @@ class SidebarUI:
         st.subheader("🤖 " + get_text("model_selection", self.language))
 
         available_models = self._get_available_models_for_analysis(analysis_type)
+        st.session_state.setdefault("benchmark_mode", False)
         benchmark_mode = st.checkbox(
             get_text("benchmark_mode", self.language),
             help=get_text("benchmark_description", self.language),
@@ -122,7 +123,6 @@ class SidebarUI:
                 selected_models = []
 
         st.session_state["selected_models"] = selected_models
-        st.session_state["benchmark_mode"] = benchmark_mode
 
         return {
             "benchmark_mode": benchmark_mode,
