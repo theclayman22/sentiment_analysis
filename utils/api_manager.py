@@ -1,11 +1,12 @@
-"""
-API-Schlüssel Management mit Fallback-Logik
-"""
+"""API key management with fallback and rate limiting helpers."""
 
-import time
-from typing import Dict, Any
+from __future__ import annotations
+
 import logging
-from config.settings import Settings, APIConfig
+import time
+from typing import Any, Dict
+
+from config.settings import APIConfig, Settings
 
 
 class APIManager:
@@ -14,26 +15,32 @@ class APIManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._rate_limits: Dict[str, Dict[str, Any]] = {}
+        self._api_rate_limits = self._build_api_rate_limits()
+        self._default_rate_limit = max(
+            (model.rate_limit for model in Settings.MODELS.values()), default=60
+        )
 
     def get_api_config(self, api_type: str) -> APIConfig:
         """Holt API-Konfiguration mit Fallback-Logik"""
         config = Settings.get_api_config(api_type)
 
         # Prüfe Primary Key
-        if self._is_key_available(api_type, "primary"):
-            return config
+        if config.primary_key:
+            if self._is_key_available(api_type, "primary"):
+                return config
 
         # Fallback auf Secondary Key
-        if config.fallback_key and self._is_key_available(api_type, "fallback"):
-            self.logger.info(f"Switching to fallback API key for {api_type}")
-            return APIConfig(
-                primary_key=config.fallback_key,
-                fallback_key=None,
-                base_url=config.base_url,
-                timeout=config.timeout
-            )
+        if config.fallback_key:
+            if self._is_key_available(api_type, "fallback"):
+                self.logger.info("Switching to fallback API key for %s", api_type)
+                return APIConfig(
+                    primary_key=config.fallback_key,
+                    fallback_key=None,
+                    base_url=config.base_url,
+                    timeout=config.timeout,
+                )
 
-        raise Exception(f"No available API keys for {api_type}")
+        raise RuntimeError(f"No available API keys for {api_type}")
 
     def _is_key_available(self, api_type: str, key_type: str) -> bool:
         """Prüft, ob ein API-Schlüssel verfügbar ist (Rate Limiting)"""
@@ -43,7 +50,7 @@ class APIManager:
             self._rate_limits[key_id] = {
                 "requests": 0,
                 "reset_time": time.time() + 60,  # Reset nach 1 Minute
-                "max_requests": Settings.MODELS.get(api_type, Settings.MODELS["vader"]).rate_limit
+                "max_requests": self._get_rate_limit_for_api(api_type),
             }
 
         rate_limit = self._rate_limits[key_id]
@@ -61,11 +68,27 @@ class APIManager:
 
         return False
 
-    def wait_for_rate_limit(self, api_type: str) -> None:
+    def wait_for_rate_limit(self, api_type: str, key_type: str = "primary") -> None:
         """Wartet bis Rate Limit zurückgesetzt wird"""
-        key_id = f"{api_type}_primary"
+        key_id = f"{api_type}_{key_type}"
         if key_id in self._rate_limits:
             wait_time = self._rate_limits[key_id]["reset_time"] - time.time()
             if wait_time > 0:
-                self.logger.info(f"Rate limit reached for {api_type}, waiting {wait_time:.1f} seconds")
+                self.logger.info(
+                    "Rate limit reached for %s (%s), waiting %.1f seconds",
+                    api_type,
+                    key_type,
+                    wait_time,
+                )
                 time.sleep(wait_time)
+
+    def _build_api_rate_limits(self) -> Dict[str, int]:
+        """Create a mapping of API types to their configured rate limits."""
+        limits: Dict[str, int] = {}
+        for model in Settings.MODELS.values():
+            limits[model.api_type] = max(limits.get(model.api_type, 0), model.rate_limit)
+        return limits
+
+    def _get_rate_limit_for_api(self, api_type: str) -> int:
+        """Return the configured rate limit for ``api_type``."""
+        return self._api_rate_limits.get(api_type, self._default_rate_limit)
