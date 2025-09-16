@@ -1,0 +1,8 @@
+streamlit
+pandas
+plotly
+openai
+torch
+transformers
+scikit-learn
+vaderSentiment
