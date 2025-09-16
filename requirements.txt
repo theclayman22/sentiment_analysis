@@ -1,9 +1,11 @@
 streamlit
 pandas
 plotly
+numpy
 openai
 torch
 transformers
 scikit-learn
+scipy
 vaderSentiment
 nltk
