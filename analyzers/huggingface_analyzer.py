@@ -175,12 +175,16 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
         target_emotions = list(EKMAN_EMOTIONS.keys())
 
         if self.model_name in self._SENTIMENT_MODELS:
-            return {emotion: 0.1 for emotion in target_emotions}
+            raise RuntimeError(
+                "Ekman analysis is not supported for sentiment-only models"
+            )
 
         if self.model_name in self._FILL_MASK_MODELS:
             return self._fill_mask_analysis(text, target_emotions)
 
-        return self._fallback_distribution(target_emotions)
+        raise RuntimeError(
+            f"Ekman analysis requires a supported fill-mask model, got {self.model_name}"
+        )
 
     def _analyze_happiness(self, text: str, **kwargs) -> Dict[str, float]:
         """Analysiert Happiness für Emotion Arc"""
