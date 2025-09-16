@@ -105,7 +105,7 @@ class EkmanAnalyzer:
             synonym_boost = 0.0
 
             for synonym in emotion_data["synonyms"]:
-                if synonym in result.scores:
+                if synonym in result.scores and synonym not in EKMAN_EMOTIONS:
                     synonym_boost += float(result.scores[synonym]) * 0.3
 
             enhanced_scores[emotion_key] = min(1.0, base_score + synonym_boost)
