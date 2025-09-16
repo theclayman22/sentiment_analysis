@@ -102,6 +102,9 @@ class ResultsDisplayUI:
         """Render comparison charts for each text in benchmark mode."""
         for index, text_results in enumerate(results):
             with st.expander(f"📄 Text {index + 1}", expanded=index < 3):
+                if not text_results:
+                    st.warning("Keine Ergebnisse für diesen Text")
+                    continue
                 first_result = next(iter(text_results.values()))
                 text_preview = first_result.text or ""
                 if text_preview:
@@ -123,13 +126,18 @@ class ResultsDisplayUI:
         self, results: List[Dict[str, AnalysisResult]]
     ) -> None:
         """Render valence results for a single selected model."""
-        if len(results) > 1:
+        has_results = any(text_results for text_results in results)
+
+        if len(results) > 1 and has_results:
             fig = self.visualizer.create_batch_overview(results, "valence")
             st.plotly_chart(fig, use_container_width=True)
 
         for index, text_results in enumerate(results):
             expanded = len(results) == 1
             with st.expander(f"📄 Text {index + 1}", expanded=expanded):
+                if not text_results:
+                    st.warning("Keine Ergebnisse für diesen Text")
+                    continue
                 first_result = next(iter(text_results.values()))
                 text_preview = first_result.text or ""
                 if text_preview:
