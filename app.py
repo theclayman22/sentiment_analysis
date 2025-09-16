@@ -10,7 +10,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 import streamlit as st
 
@@ -25,6 +25,7 @@ from models.valence_analyzer import ValenceAnalyzer
 from models.ekman_analyzer import EkmanAnalyzer
 from models.emotion_arc_analyzer import EmotionArcAnalyzer
 from config.languages import get_text
+from utils.data_exporter import DataExporter
 from utils.visualizer import SentimentVisualizer
 
 # Logging konfigurieren
@@ -45,9 +46,9 @@ class SentimentAnalysisApp:
         self.results_ui: ResultsDisplayUI | None = None
 
         # Analyzer
-        self.valence_analyzer: ValenceAnalyzer | None = None
-        self.ekman_analyzer: EkmanAnalyzer | None = None
-        self.emotion_arc_analyzer: EmotionArcAnalyzer | None = None
+        self.valence_analyzer: Optional[ValenceAnalyzer] = None
+        self.ekman_analyzer: Optional[EkmanAnalyzer] = None
+        self.emotion_arc_analyzer: Optional[EmotionArcAnalyzer] = None
 
         # Visualizer
         self.visualizer: SentimentVisualizer | None = None
@@ -106,22 +107,21 @@ class SentimentAnalysisApp:
 
         # Analyzer (Lazy Loading)
         if self.valence_analyzer is None:
-            try:
-                self.valence_analyzer = ValenceAnalyzer()
-            except Exception as exc:  # pragma: no cover - defensive initialisation
-                logger.error("Fehler beim Initialisieren des Valence Analyzers: %s", exc)
+            self.valence_analyzer = self._get_or_create_analyzer(
+                "valence_analyzer", ValenceAnalyzer
+            )
 
         if self.ekman_analyzer is None:
-            try:
-                self.ekman_analyzer = EkmanAnalyzer()
-            except Exception as exc:  # pragma: no cover - defensive initialisation
-                logger.error("Fehler beim Initialisieren des Ekman Analyzers: %s", exc)
+            self.ekman_analyzer = self._get_or_create_analyzer(
+                "ekman_analyzer", EkmanAnalyzer
+            )
 
         if self.emotion_arc_analyzer is None:
-            try:
-                self.emotion_arc_analyzer = EmotionArcAnalyzer()
-            except Exception as exc:  # pragma: no cover - defensive initialisation
-                logger.error("Fehler beim Initialisieren des Emotion Arc Analyzers: %s", exc)
+            self.emotion_arc_analyzer = self._get_or_create_analyzer(
+                "emotion_arc_analyzer", EmotionArcAnalyzer
+            )
+
+        self._update_available_models_state()
 
     def run(self) -> None:
         """Hauptschleife der Anwendung"""
@@ -455,29 +455,56 @@ class SentimentAnalysisApp:
                     st.divider()
 
         # Export für Arc-Daten
-        if st.button("📊 Arc-Daten als CSV exportieren", use_container_width=True):
-            try:
-                from utils.data_exporter import DataExporter
+        exporter = DataExporter()
+        arc_df = exporter.arc_to_dataframe(arc_data)
+        if arc_df.empty:
+            st.info("Keine Arc-Daten zum Exportieren verfügbar")
+        else:
+            csv_data = exporter.export_to_csv(arc_df)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = f"emotion_arc_{timestamp}.csv"
 
-                exporter = DataExporter()
-                arc_df = exporter.arc_to_dataframe(arc_data)
+            st.download_button(
+                label=get_text("export_csv", st.session_state.language),
+                data=csv_data,
+                file_name=filename,
+                mime="text/csv",
+                use_container_width=True,
+            )
 
-                if not arc_df.empty:
-                    csv_data = exporter.export_to_csv(arc_df)
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    filename = f"emotion_arc_{timestamp}.csv"
+    def _get_or_create_analyzer(
+        self, cache_key: str, factory: Callable[[], Any]
+    ) -> Optional[Any]:
+        cached = st.session_state.get(cache_key)
+        if cached is not None:
+            return cached
 
-                    st.download_button(
-                        label=get_text("export_csv", st.session_state.language),
-                        data=csv_data,
-                        file_name=filename,
-                        mime="text/csv",
-                    )
-                else:
-                    st.error("Keine Arc-Daten zum Exportieren verfügbar")
-            except Exception as exc:  # pragma: no cover - runtime guard
-                st.error(f"Fehler beim Export: {str(exc)}")
-                logger.error("Fehler beim Export der Arc-Daten: %s", exc)
+        try:
+            analyzer = factory()
+        except Exception as exc:  # pragma: no cover - defensive initialisation
+            logger.error("Fehler beim Initialisieren von %s: %s", cache_key, exc)
+            return None
+
+        st.session_state[cache_key] = analyzer
+        return analyzer
+
+    def _update_available_models_state(self) -> None:
+        """Synchronisiert verfügbare Modelle mit dem Session State."""
+        st.session_state["available_valence_models"] = (
+            self.valence_analyzer.get_available_models()
+            if self.valence_analyzer is not None
+            else []
+        )
+        st.session_state["available_ekman_models"] = (
+            self.ekman_analyzer.get_available_models()
+            if self.ekman_analyzer is not None
+            else []
+        )
+        st.session_state["available_emotion_arc_models"] = (
+            self.emotion_arc_analyzer.get_available_models()
+            if self.emotion_arc_analyzer is not None
+            else []
+        )
 
     def _get_model_specific_kwargs(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Holt modell-spezifische Parameter aus den Einstellungen"""
