@@ -2,6 +2,8 @@ streamlit
 pandas
 plotly
 numpy
+openpyxl
+chardet
 openai
 torch
 transformers
