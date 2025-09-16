@@ -389,7 +389,7 @@ class SentimentAnalysisApp:
         if self.emotion_arc_analyzer:
             try:
                 figure = self.emotion_arc_analyzer.create_arc_visualization(arc_data)
-                st.plotly_chart(figure, use_container_width=True)
+                st.plotly_chart(figure, width="stretch")
             except Exception as exc:  # pragma: no cover - runtime guard
                 st.error(f"Fehler bei der Visualisierung: {str(exc)}")
                 logger.error("Fehler bei der Arc-Visualisierung: %s", exc)
@@ -469,7 +469,7 @@ class SentimentAnalysisApp:
                 data=csv_data,
                 file_name=filename,
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
 
     def _get_or_create_analyzer(

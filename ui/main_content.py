@@ -147,7 +147,7 @@ class MainContentUI:
                 get_text("analyze_button", self.language),
                 type="primary",
                 disabled=button_disabled,
-                use_container_width=True,
+                width="stretch",
                 key="analyze_button",
             ):
                 return True

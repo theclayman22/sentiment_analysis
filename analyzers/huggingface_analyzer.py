@@ -24,6 +24,8 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
         "siebert/sentiment-roberta-large-english",
     }
     _DEFAULT_MODEL = "facebook/bart-large"
+    _PIPELINE_TOP_K = 50
+    _INFERENCE_TOP_K = 10
 
     def __init__(
         self,
@@ -210,19 +212,39 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
                 emotion_terms[emotion] = [term.lower() for term in get_all_emotion_terms(emotion)]
 
             if self._use_inference_api:
-                predictions = self._query_inference_api(masked_text, extra_params={"top_k": 50})
+                predictions = self._query_inference_api(
+                    masked_text,
+                    extra_params={"parameters": {"top_k": self._INFERENCE_TOP_K}},
+                )
             else:
-                predictions = self.pipeline(masked_text, top_k=50)
+                predictions = self.pipeline(
+                    masked_text,
+                    top_k=self._PIPELINE_TOP_K,
+                )
 
             if isinstance(predictions, list) and predictions and isinstance(predictions[0], list):
                 # Einige Versionen liefern eine Liste von Listen
                 predictions = predictions[0]
 
+            if not isinstance(predictions, list):
+                self.logger.warning(
+                    "Unexpected prediction format for %s: %s",
+                    self.model_name,
+                    type(predictions).__name__,
+                )
+                return self._fallback_distribution(target_emotions)
+
             emotion_scores = {emotion: 0.0 for emotion in target_emotions}
 
             for pred in predictions:
-                token = str(pred.get("token_str", "")).strip().lower()
-                score = float(pred.get("score", 0.0))
+                if not isinstance(pred, dict):
+                    continue
+                token_value = pred.get("token_str") or pred.get("token") or ""
+                token = str(token_value).strip().lower()
+                score_value = pred.get("score")
+                if score_value is None:
+                    continue
+                score = float(score_value)
 
                 for emotion, terms in emotion_terms.items():
                     if token in terms:

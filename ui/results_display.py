@@ -119,7 +119,7 @@ class ResultsDisplayUI:
                     )
 
                 fig = self.visualizer.create_valence_comparison(text_results)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 self._render_valence_table(text_results, f"valence_table_{index}")
 
     def _render_valence_single(
@@ -130,7 +130,7 @@ class ResultsDisplayUI:
 
         if len(results) > 1 and has_results:
             fig = self.visualizer.create_batch_overview(results, "valence")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         for index, text_results in enumerate(results):
             expanded = len(results) == 1
@@ -183,7 +183,7 @@ class ResultsDisplayUI:
                 )
 
         df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, key=key)
+        st.dataframe(df, width="stretch", key=key)
 
     def _render_ekman_results(
         self, results: List[Dict[str, AnalysisResult]], settings: Dict[str, Any]
@@ -208,12 +208,12 @@ class ResultsDisplayUI:
                         )
 
                     fig = self.visualizer.create_ekman_radar_chart(text_results)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
                     self._render_ekman_table(text_results, f"ekman_table_{index}")
         else:
             if len(results) > 1:
                 fig = self.visualizer.create_batch_overview(results, "ekman")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             for index, text_results in enumerate(results):
                 expanded = len(results) == 1
@@ -258,7 +258,7 @@ class ResultsDisplayUI:
             table_data.append(row)
 
         df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, key=key)
+        st.dataframe(df, width="stretch", key=key)
 
     def _render_emotion_arc_results(
         self, results: List[Dict[str, AnalysisResult]], settings: Dict[str, Any]
@@ -352,7 +352,7 @@ class ResultsDisplayUI:
                             display_df = display_df.drop(columns=["segment_text"])
                         st.dataframe(
                             display_df,
-                            use_container_width=True,
+                            width="stretch",
                             key=f"emotion_arc_table_{index}_{model_name.replace('/', '_')}",
                         )
 
