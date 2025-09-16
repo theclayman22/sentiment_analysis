@@ -44,7 +44,7 @@ EKMAN_EMOTIONS = {
         "name_en": "Disgust",
         "synonyms": [
             "revulsion", "repulsion", "nausea", "loathing", "abhorrence",
-            "aversion", "distaste", "repugnance", "contempt", "disdain",
+            "aversion", "distaste", "repugnance", "disdain",
             "revulsion", "sickening", "disgusting", "revolting"
         ]
     },
