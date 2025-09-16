@@ -147,7 +147,7 @@ class SidebarUI:
                     help="Mehr Segmente = detailliertere Analyse, aber langsamere Verarbeitung",
                 )
 
-            if any(model == "apt-5-nano" for model in selected_models):
+            if any(model == "gpt-5-nano" for model in selected_models):
                 settings["reasoning_effort"] = st.selectbox(
                     "OpenAI Reasoning Effort",
                     options=["minimal", "low", "medium", "high"],
@@ -186,7 +186,7 @@ class SidebarUI:
                 **Sentiment Analysis Toolkit**
 
                 **Verfügbare Modelle:**
-                - 🧠 OpenAI GPT-5 Nano (apt-5-nano)
+                - 🧠 OpenAI GPT-5 Nano (gpt-5-nano)
                 - 🤖 DeepSeek Chat
                 - 🤗 HuggingFace BART Large
                 - 🤗 HuggingFace RoBERTa Base

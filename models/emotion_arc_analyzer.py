@@ -76,7 +76,7 @@ class EmotionArcAnalyzer:
         try:
             config = self.api_manager.get_api_config("openai_reasoning")
             if getattr(config, "primary_key", None):
-                self.analyzers["apt-5-nano"] = OpenAIAnalyzer(config)
+                self.analyzers["gpt-5-nano"] = OpenAIAnalyzer(config)
         except Exception:  # pragma: no cover - defensive initialisation
             pass
 
@@ -99,7 +99,7 @@ class EmotionArcAnalyzer:
         self.analyzers["vader"] = VADERAnalyzer()
 
     def analyze_arc(
-        self, text: str, model: str = "apt-5-nano", n_segments: int = 20, **kwargs
+        self, text: str, model: str = "gpt-5-nano", n_segments: int = 20, **kwargs
     ) -> Dict[str, Any]:
         """Analysiert den emotionalen Bogen eines Textes."""
         segments = self.text_processor.extract_segments_for_arc(text, n_segments)

@@ -35,8 +35,8 @@ class Settings:
 
     # Verfügbare Modelle
     MODELS = {
-        "apt-5-nano": ModelConfig(
-            name="apt-5-nano",
+        "gpt-5-nano": ModelConfig(
+            name="gpt-5-nano",
             display_name="OpenAI GPT-5 Nano",
             api_type="openai_reasoning",
             max_tokens=8000,

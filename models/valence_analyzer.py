@@ -27,7 +27,7 @@ class ValenceAnalyzer:
         try:
             config = self.api_manager.get_api_config("openai_reasoning")
             if getattr(config, "primary_key", None):
-                self.analyzers["apt-5-nano"] = OpenAIAnalyzer(config)
+                self.analyzers["gpt-5-nano"] = OpenAIAnalyzer(config)
         except Exception:  # pragma: no cover - defensive initialisation
             pass
 
