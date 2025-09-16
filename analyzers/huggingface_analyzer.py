@@ -1,12 +1,11 @@
-"""
-HuggingFace Modelle Analyzer (BART, RoBERTa, SiEBERT)
-"""
+"""HuggingFace Modelle Analyzer (BART, RoBERTa, SiEBERT)."""
 
 from __future__ import annotations
 
 import time
 from typing import Any, Dict, List, Optional
 
+import requests
 import torch
 from transformers import pipeline
 
@@ -35,37 +34,55 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
         self.pipeline: Optional[Any] = None
         self.tokenizer = None
         self._fallback_active = False
+        self._use_inference_api = False
+        self._request_timeout = getattr(self.api_config, "timeout", 30)
+        self._session: Optional[requests.Session] = None
+        self._api_url: Optional[str] = None
+        self._task = self._determine_task()
         self._initialize_model()
 
+    def _determine_task(self) -> str:
+        if self.model_name in self._FILL_MASK_MODELS:
+            return "fill-mask"
+        if self.model_name in self._SENTIMENT_MODELS:
+            return "sentiment-analysis"
+        raise ValueError(f"Unsupported model: {self.model_name}")
+
     def _initialize_model(self) -> None:
-        """Initialisiert das HuggingFace Modell"""
+        """Initialisiert das HuggingFace Modell."""
+        token = getattr(self.api_config, "primary_key", None)
+        base_url = getattr(self.api_config, "base_url", None)
+
+        if token and base_url:
+            session = requests.Session()
+            session.headers.update(
+                {
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                }
+            )
+            self._session = session
+            self._api_url = f"{base_url.rstrip('/')}/models/{self.model_name}"
+            self._use_inference_api = True
+            self.pipeline = None
+            return
+
         try:
             device = 0 if torch.cuda.is_available() else -1
 
-            pipeline_kwargs: Dict[str, Any] = {}
-            token = getattr(self.api_config, "primary_key", None)
-            if token:
-                # transformers >= 4.37 verwendet den Parameter `token`
-                pipeline_kwargs["token"] = token
-
-            if self.model_name in self._FILL_MASK_MODELS:
+            if self._task == "fill-mask":
                 self.pipeline = pipeline(
                     task="fill-mask",
                     model=self.model_name,
                     dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
                     device=device,
-                    **pipeline_kwargs,
                 )
-            elif self.model_name in self._SENTIMENT_MODELS:
+            elif self._task == "sentiment-analysis":
                 self.pipeline = pipeline(
                     task="sentiment-analysis",
                     model=self.model_name,
                     device=device,
-                    **pipeline_kwargs,
                 )
-            else:
-                raise ValueError(f"Unsupported model: {self.model_name}")
-
         except Exception as exc:  # pragma: no cover - defensive logging
             self.logger.error("Error initializing model %s: %s", self.model_name, exc)
             self.pipeline = None
@@ -77,6 +94,7 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
             "provider": "huggingface",
             "model": self.model_name,
             "pipeline_available": bool(self.pipeline),
+            "inference_api": self._use_inference_api,
         }
 
         try:
@@ -121,18 +139,17 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
 
     def is_available(self) -> bool:
         """Prüft, ob der Analyzer verfügbar ist"""
-        return bool(self.pipeline) or self._fallback_active
+        return bool(self.pipeline) or self._use_inference_api or self._fallback_active
 
     def _analyze_valence(self, text: str, **kwargs) -> Dict[str, float]:
         """Analysiert Valence mit HuggingFace Modellen"""
         target_emotions = ["positive", "negative", "neutral"]
 
-        if self.model_name in self._SENTIMENT_MODELS and self.pipeline is not None:
-            result = self.pipeline(text)
-            if isinstance(result, list) and result:
-                sentiment = result[0]
-                label = sentiment.get("label", "").upper()
-                score = float(sentiment.get("score", 0.0))
+        if self.model_name in self._SENTIMENT_MODELS:
+            result = self._run_sentiment_pipeline(text)
+            if result:
+                label = result.get("label", "").upper()
+                score = float(result.get("score", 0.0))
                 if label == "POSITIVE":
                     return {
                         "positive": score,
@@ -167,12 +184,11 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
         """Analysiert Happiness für Emotion Arc"""
         target_emotions = ["happiness"]
 
-        if self.model_name in self._SENTIMENT_MODELS and self.pipeline is not None:
-            result = self.pipeline(text)
-            if isinstance(result, list) and result:
-                sentiment = result[0]
-                label = sentiment.get("label", "").upper()
-                score = float(sentiment.get("score", 0.0))
+        if self.model_name in self._SENTIMENT_MODELS:
+            result = self._run_sentiment_pipeline(text)
+            if result:
+                label = result.get("label", "").upper()
+                score = float(result.get("score", 0.0))
                 happiness = score if label == "POSITIVE" else max(0.0, 1 - score)
                 return {"happiness": happiness}
 
@@ -183,7 +199,7 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
 
     def _fill_mask_analysis(self, text: str, target_emotions: List[str]) -> Dict[str, float]:
         """Führt Fill-Mask Analyse für Emotionen durch"""
-        if self.pipeline is None:
+        if not self._use_inference_api and self.pipeline is None:
             return self._fallback_distribution(target_emotions)
 
         try:
@@ -193,11 +209,30 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
             for emotion in target_emotions:
                 emotion_terms[emotion] = [term.lower() for term in get_all_emotion_terms(emotion)]
 
-            predictions = self.pipeline(masked_text, top_k=50)
+            if self._use_inference_api:
+                predictions = self._query_inference_api(
+                    masked_text, extra_params={"top_k": 50}
+                )
+            else:
+                predictions = self.pipeline(masked_text, top_k=50)
 
-            if isinstance(predictions, list) and predictions and isinstance(predictions[0], list):
+            if not isinstance(predictions, list):
+                self.logger.warning(
+                    "Unexpected prediction payload type for %s: %s",
+                    self.model_name,
+                    type(predictions).__name__,
+                )
+                return self._fallback_distribution(target_emotions)
+
+            if predictions and isinstance(predictions[0], list):
                 # Einige Versionen liefern eine Liste von Listen
                 predictions = predictions[0]
+
+            if not all(isinstance(pred, dict) for pred in predictions):
+                self.logger.warning(
+                    "Unexpected prediction entries for %s", self.model_name
+                )
+                return self._fallback_distribution(target_emotions)
 
             emotion_scores = {emotion: 0.0 for emotion in target_emotions}
 
@@ -211,7 +246,9 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
 
             total_score = sum(emotion_scores.values())
             if total_score > 0:
-                emotion_scores = {key: value / total_score for key, value in emotion_scores.items()}
+                emotion_scores = {
+                    key: value / total_score for key, value in emotion_scores.items()
+                }
             else:
                 emotion_scores = self._fallback_distribution(target_emotions)
 
@@ -235,3 +272,60 @@ class HuggingFaceAnalyzer(BaseAnalyzer):
         if analysis_type == "emotion_arc":
             return {"happiness": 0.5}
         return {}
+
+    def _run_sentiment_pipeline(self, text: str) -> Optional[Dict[str, Any]]:
+        if self._use_inference_api:
+            data = self._query_inference_api(text)
+            if isinstance(data, list) and data:
+                first = data[0]
+                if isinstance(first, dict):
+                    return first
+            self.logger.warning(
+                "Unexpected sentiment response format for %s", self.model_name
+            )
+            return None
+
+        if self.pipeline is not None:
+            result = self.pipeline(text)
+            if isinstance(result, list) and result:
+                first = result[0]
+                if isinstance(first, dict):
+                    return first
+            self.logger.warning(
+                "Unexpected local sentiment response for %s", self.model_name
+            )
+        return None
+
+    def _query_inference_api(
+        self,
+        inputs: str,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        if not self._session or not self._api_url:
+            raise RuntimeError("Inference API session not configured")
+
+        payload: Dict[str, Any] = {"inputs": inputs}
+        if extra_params:
+            if any(key in extra_params for key in ("parameters", "options")):
+                payload.update(extra_params)
+            else:
+                payload["parameters"] = extra_params
+
+        try:
+            response = self._session.post(
+                self._api_url,
+                json=payload,
+                timeout=self._request_timeout,
+            )
+            if response.status_code == 503:
+                raise RuntimeError("Model loading in progress")
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, dict) and data.get("error"):
+                raise RuntimeError(data["error"])
+            return data
+        except requests.RequestException as exc:
+            self.logger.error(
+                "Inference API request failed for %s: %s", self.model_name, exc
+            )
+            raise

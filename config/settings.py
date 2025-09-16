@@ -70,7 +70,7 @@ class Settings:
             display_name="SiEBERT (HuggingFace)",
             api_type="huggingface",
             supports_ekman=False,
-            supports_emotion_arc=False,
+            supports_emotion_arc=True,
             max_tokens=512,
             rate_limit=100
         ),

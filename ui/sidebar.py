@@ -100,6 +100,8 @@ class SidebarUI:
             selected_models = available_models
             if available_models:
                 st.info(f"📊 {len(available_models)} Modelle ausgewählt für Benchmark")
+            else:
+                st.error("Keine Modelle für diesen Analyse-Typ verfügbar")
         else:
             if available_models:
                 default_index = 0
@@ -206,14 +208,42 @@ class SidebarUI:
 
     def _get_available_models_for_analysis(self, analysis_type: str) -> List[str]:
         """Return the model identifiers supporting ``analysis_type``."""
-        available_models: List[str] = []
+        state_key_map = {
+            "valence": "available_valence_models",
+            "ekman": "available_ekman_models",
+            "emotion_arc": "available_emotion_arc_models",
+        }
 
+        session_key = state_key_map.get(analysis_type)
+        if session_key and session_key in st.session_state:
+            session_models = st.session_state.get(session_key, [])
+            return self._filter_models_by_capability(session_models, analysis_type)
+
+        fallback: List[str] = []
         for model_name, model_config in Settings.MODELS.items():
             if analysis_type == "valence" and model_config.supports_valence:
-                available_models.append(model_name)
+                fallback.append(model_name)
             elif analysis_type == "ekman" and model_config.supports_ekman:
-                available_models.append(model_name)
+                fallback.append(model_name)
             elif analysis_type == "emotion_arc" and model_config.supports_emotion_arc:
-                available_models.append(model_name)
+                fallback.append(model_name)
 
-        return available_models
+        return fallback
+
+    def _filter_models_by_capability(
+        self, models: List[str], analysis_type: str
+    ) -> List[str]:
+        filtered: List[str] = []
+        for model_name in models:
+            model_config = Settings.MODELS.get(model_name)
+            if not model_config:
+                continue
+
+            if analysis_type == "valence" and model_config.supports_valence:
+                filtered.append(model_name)
+            elif analysis_type == "ekman" and model_config.supports_ekman:
+                filtered.append(model_name)
+            elif analysis_type == "emotion_arc" and model_config.supports_emotion_arc:
+                filtered.append(model_name)
+
+        return filtered
