@@ -96,8 +96,7 @@ class OpenAIAnalyzer(BaseAnalyzer):
         if sanitized is None:
             return self._zero_scores(labels), False
 
-        normalised = self._normalise_scores(sanitized)
-        return normalised, True
+        return sanitized, True
 
     def _derive_happiness(self, valence_scores: Dict[str, float]) -> float:
         positive = max(0.0, valence_scores.get("positive", 0.0))
@@ -140,9 +139,9 @@ class OpenAIAnalyzer(BaseAnalyzer):
     def _build_prompt(self, text: str, labels: List[str]) -> str:
         label_list = ", ".join(labels)
         return (
-            "You are an assistant that performs emotion probability estimation.\n"
-            f"Return a JSON object with numeric probabilities for the following labels: {label_list}.\n"
-            "Probabilities must be values between 0 and 1 and sum to 1.\n"
+            "You are an assistant that performs emotion intensity estimation.\n"
+            f"Return a JSON object with independent intensity scores for the following labels: {label_list}.\n"
+            "Each intensity must be a numeric value between 0 and 1; the scores do not need to sum to 1.\n"
             "Respond with JSON only without additional commentary.\n"
             f"Text: ```{text}```"
         )
@@ -218,18 +217,14 @@ class OpenAIAnalyzer(BaseAnalyzer):
                 numeric = 0.0
             if numeric < 0:
                 numeric = 0.0
+            elif numeric > 1:
+                numeric = 1.0
             sanitized[label] = numeric
             total += numeric
 
         if total <= 0:
             return None
         return sanitized
-
-    def _normalise_scores(self, scores: Dict[str, float]) -> Dict[str, float]:
-        total = sum(scores.values())
-        if total <= 0:
-            return {key: 0.0 for key in scores}
-        return {key: value / total for key, value in scores.items()}
 
     def _zero_scores(self, labels: List[str]) -> Dict[str, float]:
         return {label: 0.0 for label in labels}
